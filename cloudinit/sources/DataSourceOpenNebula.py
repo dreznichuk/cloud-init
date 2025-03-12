@@ -252,28 +252,41 @@ class OpenNebulaNetwork:
             devconf["match"] = {"macaddress": mac}
 
             # Set IPv4 address
-            devconf["addresses"] = []
+            devconf["addresses4"] = []
             mask = self.get_mask(c_dev)
             prefix = str(net.ipv4_mask_to_net_prefix(mask))
-            devconf["addresses"].append(self.get_ip(c_dev, mac) + "/" + prefix)
+            devconf["addresses4"].append(self.get_ip(c_dev, mac) + "/" + prefix)
 
             # Set IPv6 Global and ULA address
+            devconf["addresses6"] = []
             addresses6 = self.get_ip6(c_dev)
             if addresses6:
                 prefix6 = self.get_ip6_prefix(c_dev)
-                devconf["addresses"].extend(
+                devconf["addresses6"].extend(
                     [i + "/" + prefix6 for i in addresses6]
                 )
+
+            # Define routes
+            devconf["routes"] = []
 
             # Set IPv4 default gateway
             gateway = self.get_gateway(c_dev)
             if gateway:
-                devconf["gateway4"] = gateway
+                route = {"to": "default", "via": gateway}
+                if all([net.should_add_gateway_onlink_flag(gateway, address) for address in devconf["addresses4"]]):
+                    route["on-link"] = True
+                devconf["routes"].extend([route])
 
             # Set IPv6 default gateway
             gateway6 = self.get_gateway6(c_dev)
             if gateway6:
-                devconf["gateway6"] = gateway6
+                route = {"to": "default", "via": gateway6}
+                if all([net.should_add_gateway_onlink_flag(gateway6, address) for address in devconf["addresses6"]]):
+                    route["on-link"] = True
+                devconf["routes"].extend([route])
+
+            # Merge down addresses
+            devconf["addresses"] = devconf.pop("addresses6") + devconf.pop("addresses4")
 
             # Set DNS servers and search domains
             nameservers = self.get_nameservers(c_dev)
